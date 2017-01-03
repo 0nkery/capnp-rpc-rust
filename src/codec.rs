@@ -58,11 +58,24 @@ impl ReaderSegments for OwnedSegments {
     }
 }
 
-struct CapnpCodec<A> where A: Allocator {
+struct CapnpCodec<A>
+    where A: Allocator
+{
     read_state: ReadState,
     read_data: ReadData,
     read_options: ReaderOptions,
     phantom: PhantomData<A>,
+}
+
+impl<A: Allocator> CapnpCodec<A> {
+    pub fn new(options: ReaderOptions) -> Self {
+        CapnpCodec {
+            read_state: ReadState::Initial,
+            read_data: Default::default(),
+            read_options: options,
+            phantom: Default::default(),
+        }
+    }
 }
 
 impl<A: Allocator> Codec for CapnpCodec<A> {
@@ -203,5 +216,92 @@ impl<A: Allocator> CapnpCodec<A> {
     fn read_u32(&self, buf: EasyBuf) -> Result<u32, Error> {
         let mut rdr = io::Cursor::new(buf);
         rdr.read_u32::<LittleEndian>()
+    }
+}
+
+
+#[cfg(test)]
+pub mod test {
+
+    use std::io::Error;
+
+    use capnp::message::ReaderOptions;
+    use capnp::message::HeapAllocator;
+
+    use tokio_core::io::EasyBuf;
+
+    use super::CapnpCodec;
+    use super::ReadData;
+
+    fn decode(buf: Vec<u8>) -> Result<ReadData, Error> {
+        let mut codec = CapnpCodec::<HeapAllocator>::new(ReaderOptions::new());
+        let mut buf = EasyBuf::from(buf);
+        codec.read_segments_count(&mut buf)?;
+        codec.read_segments_meta(&mut buf)?;
+        codec.read_segments(&mut buf)?;
+
+        Ok(codec.read_data)
+    }
+
+    fn prepare_buf(input: &[u8]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(input.iter().cloned());
+        buf
+    }
+
+    fn check_decoded<CF>(d: Result<ReadData, Error>, check_fn: CF) where CF: FnOnce(ReadData) {
+        match d {
+            Err(msg) => panic!("{}", msg),
+            Ok(read_data) => check_fn(read_data)
+        };
+    }
+
+    #[test]
+    fn test_decode() {
+        // 1 segment, 0 length
+        let buf = prepare_buf(&[0, 0, 0, 0, 0, 0, 0, 0]);
+        check_decoded(decode(buf), |rd| {
+            assert!(rd.segments_count == 0);
+            assert!(vec![(0, 0)] == rd.segments_slices);
+        });
+
+        // 1 segment, 1 length
+        let buf = prepare_buf(&[0, 0, 0, 0, 1, 0, 0, 0]);
+        check_decoded(decode(buf), |rd| {
+            assert!(rd.segments_count == 1);
+            assert!(vec![(0, 1)] == rd.segments_slices);
+        });
+
+        // 2 segments, 1 length, 1 length, padding
+        let buf = prepare_buf(&[1, 0, 0, 0,
+                                1, 0, 0, 0,
+                                1, 0, 0, 0,
+                                0, 0, 0, 0]);
+        check_decoded(decode(buf), |rd| {
+            assert!(rd.segments_count == 2);
+            assert!(vec![(0, 1), (1, 2)] == rd.segments_slices);
+        });
+
+        // 3 segments, 1 length, 1 length, 256 length
+        let buf = prepare_buf(&[2, 0, 0, 0,
+                                1, 0, 0, 0,
+                                1, 0, 0, 0,
+                                0, 1, 0, 0]);
+        check_decoded(decode(buf), |rd| {
+            assert!(rd.segments_count == 258);
+            assert!(vec![(0, 1), (1, 2), (2, 258)] == rd.segments_slices);
+        });
+
+        // 4 segments, 77 length, 23 length, 1 length, 99 length, padding
+        let buf = prepare_buf(&[3, 0, 0, 0,
+                                77, 0, 0, 0,
+                                23, 0, 0, 0,
+                                1, 0, 0, 0,
+                                99, 0, 0, 0,
+                                0, 0, 0, 0]);
+        check_decoded(decode(buf), |rd| {
+            assert!(rd.segments_count == 200);
+            assert!(vec![(0, 77), (77, 100), (100, 101), (101, 200)] == rd.segments_slices);
+        });
     }
 }
