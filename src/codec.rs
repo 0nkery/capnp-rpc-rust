@@ -40,11 +40,11 @@ enum ReadState {
 struct ReadData {
     segments_count: usize,
     segments_slices: Vec<(usize, usize)>,
-    segments: Vec<Word>,
+    words: Vec<Word>,
 }
 
 struct OwnedSegments {
-    segments: Vec<Word>,
+    words: Vec<Word>,
     slices: Vec<(usize, usize)>,
 }
 
@@ -53,7 +53,7 @@ impl ReaderSegments for OwnedSegments {
         let id = id as usize;
         if id < self.slices.len() {
             let (a, b) = self.slices[id];
-            Some(&self.segments[a..b])
+            Some(&self.words[a..b])
         } else {
             None
         }
@@ -106,7 +106,7 @@ impl<A: Allocator> Codec for CapnpCodec<A> {
             ReadState::Done => {
                 let segments = OwnedSegments {
                     slices: mem::replace(&mut self.read_data.segments_slices, Default::default()),
-                    segments: mem::replace(&mut self.read_data.segments, Default::default()),
+                    words: mem::replace(&mut self.read_data.words, Default::default()),
                 };
                 return Ok(Some(Reader::new(segments, self.read_options)));
             }
@@ -181,7 +181,7 @@ impl<A: Allocator> CapnpCodec<A> {
         }
 
         // Reserving hereafter we ensure we don't exceed the limit (^).
-        self.read_data.segments.reserve_exact(seg_count);
+        self.read_data.words.reserve_exact(seg_count);
 
         // Checking padding up to the next word boundary.
         let read_bytes = SEGMENTS_COUNT_OFFSET + needed_buf_len;
@@ -194,12 +194,12 @@ impl<A: Allocator> CapnpCodec<A> {
     }
 
     fn read_segments(&mut self, buf: &mut EasyBuf) -> Result<ReadState, Error> {
-        let segments = &mut self.read_data.segments;
+        let words = &mut self.read_data.words;
         let slices = &self.read_data.segments_slices;
-        let ready_segments = segments.len();
+        let ready_segments = words.len();
         let total_segments = self.read_data.segments_count;
 
-        let mut writer = io::Cursor::new(Word::words_to_bytes_mut(segments));
+        let mut writer = io::Cursor::new(Word::words_to_bytes_mut(words));
         let (start, _) = slices[ready_segments];
         writer.seek(SeekFrom::Start(start as u64))?;
 
