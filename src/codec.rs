@@ -5,8 +5,11 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::io::Seek;
 use std::mem;
+use std::marker::PhantomData;
 
-use capnp::message;
+use capnp::message::Allocator;
+use capnp::message::Builder;
+use capnp::message::Reader;
 use capnp::message::ReaderOptions;
 use capnp::message::ReaderSegments;
 use capnp::Word;
@@ -16,6 +19,7 @@ use tokio_core::io::EasyBuf;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use byteorder::WriteBytesExt;
 
 
 const SEGMENTS_COUNT_OFFSET: usize = 4;
@@ -54,15 +58,16 @@ impl ReaderSegments for OwnedSegments {
     }
 }
 
-struct CapnpCodec {
+struct CapnpCodec<A> where A: Allocator {
     read_state: ReadState,
     read_data: ReadData,
     read_options: ReaderOptions,
+    phantom: PhantomData<A>,
 }
 
-impl Codec for CapnpCodec {
-    type In = message::Reader<OwnedSegments>;
-    type Out = ();
+impl<A: Allocator> Codec for CapnpCodec<A> {
+    type In = Reader<OwnedSegments>;
+    type Out = Builder<A>;
 
     fn decode(&mut self, buf: &mut EasyBuf) -> Result<Option<Self::In>, Error> {
         match self.read_state {
@@ -80,7 +85,7 @@ impl Codec for CapnpCodec {
                     slices: mem::replace(&mut self.read_data.segments_slices, Default::default()),
                     segments: mem::replace(&mut self.read_data.segments, Default::default()),
                 };
-                return Ok(Some(message::Reader::new(segments, self.read_options)));
+                return Ok(Some(Reader::new(segments, self.read_options)));
             }
         }
 
@@ -88,12 +93,22 @@ impl Codec for CapnpCodec {
     }
 
     fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> io::Result<()> {
+        let segments = msg.get_segments_for_output();
+
+        buf.write_u32::<LittleEndian>(segments.len() as u32)?;
+        for segment in segments.iter() {
+            buf.write_u32::<LittleEndian>(segment.len() as u32)?;
+        }
+        for segment in segments.iter() {
+            buf.write(Word::words_to_bytes(segment))?;
+        }
+
         Ok(())
     }
 }
 
-// Decode functions.
-impl CapnpCodec {
+// Decode functions
+impl<A: Allocator> CapnpCodec<A> {
     fn read_segments_count(&mut self, buf: &mut EasyBuf) -> Result<ReadState, Error> {
         if buf.len() >= SEGMENTS_COUNT_OFFSET {
             // From Capnp docs: The number of segments, minus one
@@ -183,7 +198,7 @@ impl CapnpCodec {
 }
 
 // Helper functions
-impl CapnpCodec {
+impl<A: Allocator> CapnpCodec<A> {
     #[inline]
     fn read_u32(&self, buf: EasyBuf) -> Result<u32, Error> {
         let mut rdr = io::Cursor::new(buf);
