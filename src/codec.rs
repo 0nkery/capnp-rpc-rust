@@ -249,6 +249,13 @@ pub mod test {
         buf
     }
 
+    fn prepare_buf2(input1: &[u8], input2: &[u8]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(input1.iter().cloned());
+        buf.extend(input2.iter().cloned());
+        buf
+    }
+
     fn check_decoded<CF>(d: Result<ReadData, Error>, check_fn: CF) where CF: FnOnce(ReadData) {
         match d {
             Err(msg) => panic!("{}", msg),
@@ -303,5 +310,24 @@ pub mod test {
             assert!(rd.segments_count == 200);
             assert!(vec![(0, 77), (77, 100), (100, 101), (101, 200)] == rd.segments_slices);
         });
+    }
+
+    #[test]
+    fn test_invalid_decode() {
+        // 513 segments
+        let buf = prepare_buf2(&[0, 2, 0, 0], &[0; 513 * 4]);
+        assert!(decode(buf).is_err());
+
+        // 1 segments
+        let buf = prepare_buf(&[0, 0, 0, 0]);
+        assert!(decode(buf).is_err());
+
+        // 1 segments
+        let buf = prepare_buf2(&[0, 0, 0, 0], &[0; 3]);
+        assert!(decode(buf).is_err());
+
+        // 0 segments
+        let buf = prepare_buf(&[255, 255, 255, 255]);
+        assert!(decode(buf).is_err());
     }
 }
