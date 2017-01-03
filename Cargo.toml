@@ -22,3 +22,5 @@ gj = "0.2"
 gjio = "0.1"
 capnp = {version = "0.7", features = ["rpc"]}
 capnp-gj = "0.2"
+tokio-core = "0.1"
+byteorder = "1.0"

@@ -66,6 +66,9 @@ extern crate capnp;
 extern crate gjio;
 extern crate capnp_gj;
 
+extern crate tokio_core;
+extern crate byteorder;
+
 use gj::Promise;
 use capnp::Error;
 use capnp::private::capability::{ClientHook, ServerHook};
@@ -89,6 +92,8 @@ mod local;
 mod queued;
 mod rpc;
 pub mod twoparty;
+
+mod codec;
 
 pub trait OutgoingMessage {
     fn get_body<'a>(&'a mut self) -> ::capnp::Result<::capnp::any_pointer::Builder<'a>>;
