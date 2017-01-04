@@ -43,7 +43,7 @@ struct ReadData {
     words: Vec<Word>,
 }
 
-struct OwnedSegments {
+pub struct OwnedSegments {
     words: Vec<Word>,
     slices: Vec<(usize, usize)>,
 }
@@ -60,7 +60,7 @@ impl ReaderSegments for OwnedSegments {
     }
 }
 
-struct CapnpCodec<A>
+pub struct CapnpCodec<A>
     where A: Allocator
 {
     read_state: ReadState,
