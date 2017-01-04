@@ -237,7 +237,6 @@ impl<A: Allocator> CapnpCodec<A> {
         Ok(())
     }
 
-
     // Helpers
     #[inline]
     fn read_u32(&self, buf: EasyBuf) -> Result<u32, Error> {
