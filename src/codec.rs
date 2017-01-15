@@ -26,7 +26,7 @@ use byteorder::WriteBytesExt;
 const SEGMENTS_COUNT_OFFSET: usize = 4;
 const SEGMENTS_LEN_OFFSET: usize = 4;
 const SEGMENTS_COUNT_MAX: usize = 512;
-const WORD_SIZE: usize = 8;
+pub const WORD_SIZE: usize = 8;
 
 #[derive(Debug, PartialEq)]
 enum ReadState {
@@ -75,8 +75,8 @@ impl<A: Allocator> CapnpCodec<A> {
     pub fn new(options: ReaderOptions) -> Self {
         CapnpCodec {
             read_state: ReadState::Initial,
-            read_data: Default::default(),
             read_options: options,
+            read_data: Default::default(),
             phantom: Default::default(),
             prev_buf_len: Default::default(),
         }
@@ -129,29 +129,29 @@ impl<A: Allocator> Codec for CapnpCodec<A> {
 // Decode and encode functions
 impl<A: Allocator> CapnpCodec<A> {
     fn read_segments_count(&mut self, buf: &mut EasyBuf) -> Result<ReadState, Error> {
-        if buf.len() >= SEGMENTS_COUNT_OFFSET {
-            // From Capnp docs: The number of segments, minus one
-            // (since there is always at least one segment).
-            // We need to have full count, therefore `wrapping_add`.
-            let segments_count = self.read_u32(buf.drain_to(SEGMENTS_COUNT_OFFSET))?
-                .wrapping_add(1) as usize;
-
-            if segments_count >= SEGMENTS_COUNT_MAX {
-                return Err(Error::new(ErrorKind::InvalidInput,
-                                      format!("Too many segments: {}", segments_count)));
-            } else if segments_count == 0 {
-                return Err(Error::new(ErrorKind::InvalidInput,
-                                      format!("Too few segments: {}", segments_count)));
-            }
-
-            self.read_data.segments_count = segments_count;
-            self.read_data.segments_slices.reserve_exact(segments_count);
-
-            Ok(ReadState::KnowsSegmentsCount)
-        } else {
+        if buf.len() < SEGMENTS_COUNT_OFFSET {
             self.prev_buf_len = buf.len();
-            Ok(ReadState::Initial)
+            return Ok(ReadState::Initial);
         }
+
+        // From Capnp docs: The number of segments, minus one
+        // (since there is always at least one segment).
+        // We need to have full count, therefore `wrapping_add`.
+        let segments_count = self.read_u32(buf.drain_to(SEGMENTS_COUNT_OFFSET))?
+            .wrapping_add(1) as usize;
+
+        if segments_count >= SEGMENTS_COUNT_MAX {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                  format!("Too many segments: {}", segments_count)));
+        } else if segments_count == 0 {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                  format!("Too few segments: {}", segments_count)));
+        }
+
+        self.read_data.segments_count = segments_count;
+        self.read_data.segments_slices.reserve_exact(segments_count);
+
+        Ok(ReadState::KnowsSegmentsCount)
     }
 
     fn read_segments_meta(&mut self, buf: &mut EasyBuf) -> Result<ReadState, Error> {
