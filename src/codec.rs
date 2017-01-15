@@ -247,7 +247,7 @@ impl<A: Allocator> CapnpCodec<A> {
 
 
 #[cfg(test)]
-pub mod test {
+mod test {
 
     use std::io::Error;
 
