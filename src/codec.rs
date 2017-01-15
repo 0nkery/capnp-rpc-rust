@@ -49,7 +49,7 @@ pub struct OwnedSegments {
 }
 
 impl ReaderSegments for OwnedSegments {
-    fn get_segment<'a>(&'a self, id: u32) -> Option<&'a [Word]> {
+    fn get_segment(&self, id: u32) -> Option<&[Word]> {
         let id = id as usize;
         if id < self.slices.len() {
             let (a, b) = self.slices[id];
@@ -119,7 +119,7 @@ impl<A: Allocator> Codec for CapnpCodec<A> {
         let segments = msg.get_segments_for_output();
         self.construct_segment_table(buf, &segments)?;
         for segment in segments.iter() {
-            buf.write(Word::words_to_bytes(segment))?;
+            buf.write_all(Word::words_to_bytes(segment))?;
         }
 
         Ok(())
@@ -211,7 +211,7 @@ impl<A: Allocator> CapnpCodec<A> {
                 return Ok(ReadState::KnowsSegmentsMeta);
             }
 
-            writer.write(buf.drain_to(needed_buf_len).as_slice())?;
+            writer.write_all(buf.drain_to(needed_buf_len).as_slice())?;
         }
 
         Ok(ReadState::Done)

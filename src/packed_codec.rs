@@ -26,7 +26,9 @@ enum ReadState {
     Packed(u8),
 }
 
-struct PackedCapnpCodec<A> where A: Allocator {
+struct PackedCapnpCodec<A>
+    where A: Allocator
+{
     codec: CapnpCodec<A>,
     read_state: ReadState,
     out_buf: EasyBuf,
@@ -59,7 +61,7 @@ impl<A: Allocator> Codec for PackedCapnpCodec<A> {
                 match tag {
                     0x00 => 1,
                     0xFF => WORD_SIZE + 1,
-                    t @ _ => t.count_ones() as usize,
+                    t => t.count_ones() as usize,
                 }
             }
             ReadState::Unpacked(words_count) => (words_count as usize) * WORD_SIZE,
@@ -112,7 +114,7 @@ impl<A: Allocator> PackedCapnpCodec<A> {
 
                 self.try_read_unpacked(buf, unpacked_words_count)
             }
-            t @ _ => self.try_read_packed(buf, t)
+            t => self.try_read_packed(buf, t),
         }
     }
 
@@ -136,7 +138,10 @@ impl<A: Allocator> PackedCapnpCodec<A> {
         Ok(ReadState::Initial)
     }
 
-    fn try_read_unpacked(&mut self, buf: &mut EasyBuf, words_count: u8) -> Result<ReadState, Error> {
+    fn try_read_unpacked(&mut self,
+                         buf: &mut EasyBuf,
+                         words_count: u8)
+                         -> Result<ReadState, Error> {
         let needed_buf_len = (words_count as usize) * WORD_SIZE;
         if buf.len() < needed_buf_len {
             return Ok(ReadState::Unpacked(words_count));
