@@ -94,6 +94,7 @@ mod rpc;
 pub mod twoparty;
 
 mod codec;
+mod packed_codec;
 
 pub trait OutgoingMessage {
     fn get_body<'a>(&'a mut self) -> ::capnp::Result<::capnp::any_pointer::Builder<'a>>;
